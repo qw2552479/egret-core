@@ -495,10 +495,10 @@ module egret.sys {
 
         FPSImpl.prototype.createDisplay = function () {
             this.shape = new egret.Shape();
-            this.addChild(this.shape);
+            //this.addChild(this.shape);
             var textField = new egret.TextField();
             textField.size = this.styles["size"] === undefined ? 24 : parseInt(this.styles["size"]);
-            this.addChild(textField);
+            //this.addChild(textField);
             this.textField = textField;
             textField.textColor = this.styles["textColor"] === undefined ? 0x00c200 : parseInt(this.styles["textColor"]);
             textField.fontFamily = "monospace";
@@ -506,7 +506,7 @@ module egret.sys {
             textField.y = 10;
             var textField = new egret.TextField();
             this.infoText = textField;
-            this.addChild(textField);
+            //this.addChild(textField);
             textField.textColor = this.styles["textColor"] === undefined ? 0x00c200 : parseInt(this.styles["textColor"]);
             textField.fontFamily = "monospace";
             textField.x = 10;
@@ -533,6 +533,7 @@ module egret.sys {
                 var lastCostTicker = Math.round(this.costTicker / this.totalTick);
 
                 var text = "FPS: " + lastFPS + "\nDraw: " + lastDrawCalls + "," + lastDirtyRatio + "%\nCost: " + lastCostTicker + "," + lastCostDirty + "," + lastCostRender;
+                window['egretfps'] = "FPS: " + lastFPS + "<br>Draw: " + lastDrawCalls + "," + lastDirtyRatio + "%<br>Cost: " + lastCostTicker + "," + lastCostDirty + "," + lastCostRender;
                 if (this.textField.text != text) {
                     this.textField.text = text;
                     this.updateLayout();
