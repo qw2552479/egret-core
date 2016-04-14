@@ -1447,6 +1447,8 @@ declare module egret.sys {
         smoothing = 10,
         explicitBitmapWidth = 11,
         explicitBitmapHeight = 12,
+        sourceWidth = 13,
+        sourceHeight = 14,
     }
 }
 declare module egret {
@@ -1550,7 +1552,7 @@ declare module egret {
         /**
          * @private
          */
-        private setImageData(image, bitmapX, bitmapY, bitmapWidth, bitmapHeight, offsetX, offsetY, textureWidth, textureHeight);
+        private setImageData(image, bitmapX, bitmapY, bitmapWidth, bitmapHeight, offsetX, offsetY, textureWidth, textureHeight, sourceWidth, sourceHeight);
         /**
          * @private
          */
@@ -1693,7 +1695,7 @@ declare module egret {
         /**
          * @private
          */
-        static $drawImage(node: sys.BitmapNode, image: any, bitmapX: number, bitmapY: number, bitmapWidth: number, bitmapHeight: number, offsetX: number, offsetY: number, textureWidth: number, textureHeight: number, destW: number, destH: number, scale9Grid: egret.Rectangle, fillMode: string, smoothing: boolean): void;
+        static $drawImage(node: sys.BitmapNode, image: any, bitmapX: number, bitmapY: number, bitmapWidth: number, bitmapHeight: number, offsetX: number, offsetY: number, textureWidth: number, textureHeight: number, destW: number, destH: number, sourceWidth: number, sourceHeight: number, scale9Grid: egret.Rectangle, fillMode: string, smoothing: boolean): void;
         /**
          * @private
          * 绘制九宫格位图
@@ -8981,7 +8983,18 @@ declare module egret.sys {
          * 控制在缩放时是否对位图进行平滑处理。
          */
         smoothing: boolean;
+        /**
+         * 相对偏移矩阵。
+         */
         matrix: egret.Matrix;
+        /**
+         * 图片宽度。WebGL渲染使用
+         */
+        imageWidth: number;
+        /**
+         * 图片高度。WebGL渲染使用
+         */
+        imageHeight: number;
         /**
          * 绘制一次位图
          */
@@ -10727,6 +10740,21 @@ declare module egret {
          * 设置系统信息
          */
         static $setNativeCapabilities(value: string): void;
+        /***
+         * @language en_US
+         * current render mode
+         * @type {string}
+         * @version Egret 3.0.7
+         * @platform Web,Native
+         */
+        /***
+         * @language zh_CN
+         * 当前渲染模式
+         * @type {string}
+         * @version Egret 3.0.7
+         * @platform Web,Native
+         */
+        static renderMode: string;
     }
 }
 declare var testDeviceType: () => boolean;
