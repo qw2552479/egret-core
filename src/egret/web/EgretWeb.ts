@@ -78,11 +78,11 @@ module egret.web {
             var player = new WebPlayer(container, options);
             container["egret-player"] = player;
             //webgl模式关闭脏矩形
-            if(options.renderMode == "webgl") {
-                player.stage.dirtyRegionPolicy = DirtyRegionPolicy.OFF;
-                egret.sys.DisplayList.prototype.setDirtyRegionPolicy = function () {
-                };
-            }
+            //if(options.renderMode == "webgl") {
+            //    player.stage.dirtyRegionPolicy = DirtyRegionPolicy.OFF;
+            //    egret.sys.DisplayList.prototype.setDirtyRegionPolicy = function () {
+            //    };
+            //}
         }
     }
 
@@ -97,11 +97,13 @@ module egret.web {
             sys.hitTestBuffer = new WebGLRenderBuffer(3, 3);
             //屏蔽掉cacheAsBitmap,webgl模式不能有太多的RenderContext
             DisplayObject.prototype.$setHasDisplayList = function(){};
+            Capabilities.renderMode = "webgl";
         }
         else {
             sys.RenderBuffer = web.CanvasRenderBuffer;
             sys.systemRenderer = new CanvasRenderer();
             sys.hitTestBuffer = new CanvasRenderBuffer(3, 3);
+            Capabilities.renderMode = "canvas";
         }
     }
 

@@ -42,8 +42,6 @@ module egret.web {
         return canvas;
     }
 
-    var sharedCanvas:HTMLCanvasElement = createCanvas();
-
     /**
      * @private
      * WebGL渲染器
@@ -54,6 +52,8 @@ module egret.web {
             //todo 抽取出一个WebglRenderContext
             this.surface = createCanvas(width, height);
             this.initWebGL();
+            this.initFrameBuffer();
+            this.enableFrameBuffer();// 初始化后开启frameBuffer，保证第一帧绘制在frameBuffer上
         }
 
         /**
@@ -64,6 +64,90 @@ module egret.web {
          * 呈现最终绘图结果的画布
          */
         public surface:HTMLCanvasElement;
+        /**
+         * 帧缓存
+         * */
+        public frameBuffer:WebGLFramebuffer;
+        /**
+         * 模版缓存(绑定在frameBuffer上,当作stencilBuffer)
+         * */
+        public stencilBuffer:WebGLRenderbuffer;
+        /**
+         * 帧缓存绑定的材质
+         * */
+        public texture:WebGLTexture;
+
+        /**
+         * 初始化帧缓存配置
+         * */
+        public initFrameBuffer():void {
+            this.initFrameTexture();
+            this.initStencilBufferObject();
+            this.initFrameBufferObject();
+        }
+
+        private initFrameTexture():void {
+            var gl:any = this.context;
+            this.texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, this.texture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.surface.width, this.surface.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+        }
+
+        private initStencilBufferObject():void {
+            var gl:any = this.context;
+            this.stencilBuffer = gl.createRenderbuffer();
+            gl.bindRenderbuffer(gl.RENDERBUFFER, this.stencilBuffer);
+            gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_STENCIL, this.surface.width, this.surface.height);
+        }
+
+        private initFrameBufferObject():void {
+            var gl:any = this.context;
+            this.frameBuffer = gl.createFramebuffer();
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this.frameBuffer);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.texture, 0);
+            gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, gl.RENDERBUFFER, this.stencilBuffer);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        }
+
+        public resizeFrameBuffer():void {
+            var gl:any = this.context;
+            gl.bindTexture(gl.TEXTURE_2D, this.texture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, this.surface.width, this.surface.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this.frameBuffer);
+            gl.bindRenderbuffer(gl.RENDERBUFFER, this.stencilBuffer);
+            gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_STENCIL, this.surface.width, this.surface.height);
+            this.frameBufferBinding || gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        }
+
+        /**
+         * frameBuffer绑定标示
+         * */
+        private frameBufferBinding:boolean = false;
+
+        /**
+         * 启用frameBuffer
+         * */
+        public enableFrameBuffer():void {
+            var gl = this.context;
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this.frameBuffer);
+            this.frameBufferBinding = true;
+        }
+
+        /**
+         * 禁用frameBuffer
+         * */
+        public disableFrameBuffer():void {
+            var gl = this.context;
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            this.frameBufferBinding = false;
+        }
 
         /**
          * 渲染缓冲的宽度，以像素为单位。
@@ -105,6 +189,9 @@ module egret.web {
                     surface.height = height;
                 }
             }
+
+            this.resizeFrameBuffer();
+
             this.onResize();
             this.clear();
         }
@@ -117,6 +204,9 @@ module egret.web {
          * @param offsetY 原始图像数据在改变后缓冲区的绘制起始位置y
          */
         public resizeTo(width:number, height:number, offsetX:number, offsetY:number):void {
+            if (!sharedBuffer) {
+                sharedBuffer = new WebGLRenderBuffer()
+            }
             var newBuffer = sharedBuffer;
             var oldSurface = this.surface;
             var oldContext = this.context;
@@ -125,7 +215,9 @@ module egret.web {
             this.resize(Math.max(width, 257), Math.max(height, 257));
             this.setTransform(1, 0, 0, 1, 0, 0);
             this.setGlobalCompositeOperation("source-over");
-            this.drawImage(<any>oldSurface, 0, 0, oldSurface.width, oldSurface.height, offsetX, offsetY, oldSurface.width, oldSurface.height);
+            var oldSurfaceWidth = oldSurface.width;
+            var oldSurfaceHeight = oldSurface.height;
+            this.drawImage(<any>oldSurface, 0, 0, oldSurfaceWidth, oldSurfaceHeight, offsetX, offsetY, oldSurfaceWidth, oldSurfaceHeight, oldSurfaceWidth, oldSurfaceHeight);
             sharedBuffer.context = oldContext;
             sharedBuffer.surface = oldSurface;
             sharedBuffer.resize(1, 1);
@@ -139,60 +231,57 @@ module egret.web {
          * @param offsetY 矩形要加上的偏移量y
          */
         public beginClip(regions:sys.Region[], offsetX?:number, offsetY?:number):void {
-            //offsetX = +offsetX || 0;
-            //offsetY = +offsetY || 0;
-            ////var context = this.context;
-            //this.setTransform(1, 0, 0, 1, offsetX, offsetY);
-            //var length = regions.length;
-            ////只有一个区域且刚好为舞台大小时,不设置模板
-            //if (length == 1 && regions[0].minX == 0 && regions[0].minY == 0 &&
-            //    regions[0].width == this.surface.width && regions[0].height == this.surface.height) {
-            //    this.maskPushed = false;
-            //    return;
-            //}
-            //for (var i = 0; i < length; i++) {
-            //    var region = regions[i];
-            //    this.clearRect(region.minX, region.minY, region.width, region.height);
-            //}
-            //if (length > 0) {
-            //    this.context.viewport(0, 0, this.surface.width, this.surface.height);
-            //    this.pushMask(regions);
-            //    this.maskPushed = true;
-            //    this.offsetX = offsetX;
-            //    this.offsetY = offsetY;
-            //}
-            //else {
-            //    this.maskPushed = false;
-            //}
-            this.clear();
+            offsetX = +offsetX || 0;
+            offsetY = +offsetY || 0;
+            this.setTransform(1, 0, 0, 1, offsetX, offsetY);
+            var length = regions.length;
+            // 擦除脏矩形区域
+            for (var i = 0; i < length; i++) {
+                var region = regions[i];
+                this.clearRect(region.minX, region.minY, region.width, region.height);
+            }
+            //只有一个区域且刚好为舞台大小时,不设置模板
+            if (length == 1 && regions[0].minX == 0 && regions[0].minY == 0 &&
+                regions[0].width == this.surface.width && regions[0].height == this.surface.height) {
+                this.maskPushed = false;
+                return;
+            }
+            // 设置模版
+            if (length > 0) {
+                this.pushMask(regions);
+                this.maskPushed = true;
+                this.offsetX = offsetX;
+                this.offsetY = offsetY;
+            }
+            else {
+                this.maskPushed = false;
+            }
         }
 
-        //private maskPushed:boolean;
-        //private offsetX:number;
-        //private offsetY:number;
+        private maskPushed:boolean;
+        private offsetX:number;
+        private offsetY:number;
 
         /**
          * 取消上一次设置的clip。
          */
         public endClip():void {
-            //if (this.maskPushed) {
-            //    this.setTransform(1, 0, 0, 1, this.offsetX, this.offsetY);
-            //    this.popMask();
-            //}
+            if (this.maskPushed) {
+                this.setTransform(1, 0, 0, 1, this.offsetX, this.offsetY);
+                this.popMask();
+            }
         }
 
         /**
          * 获取指定坐标的像素
          */
         public getPixel(x:number, y:number):number[] {
-            //todo 标记脏避免每次绘制到canvas
-            var canvas = sharedCanvas;
-            var context = canvas.getContext("2d");
-            canvas.width = this.surface.width;
-            canvas.height = this.surface.height;
-            context.drawImage(this.surface, 0, 0);
-            //todo 宽度设置回去
-            return <number[]><any>context.getImageData(x, y, 1, 1).data;
+            var gl = this.context;
+            var pixels = new Uint8Array(4);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this.frameBuffer);
+            gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+            this.frameBufferBinding || gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            return <number[]><any>pixels;
         }
 
         /**
@@ -207,18 +296,19 @@ module egret.web {
          * 清空缓冲区数据
          */
         public clear():void {
-            this.clearRect(0, 0, this.surface.width, this.surface.height);
+            var gl:any = this.context;
+            gl.colorMask(true, true, true, true);
+            gl.clearColor(0, 0, 0, 0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
         }
 
         /**
          * @private
          */
         private clearRect(x:number, y:number, width:number, height:number):void {
-            var gl:any = this.context;
-            gl.colorMask(true, true, true, true);
-            gl.viewport(x, y, width, height);
-            gl.clearColor(0, 0, 0, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
+            this.setGlobalCompositeOperation("destination-out");
+            this.renderGraphics({x: x, y: y, width: width, height: height});
+            this.setGlobalCompositeOperation("source-over");
         }
 
         /**
@@ -326,12 +416,14 @@ module egret.web {
         }
 
         //Rendering Functions begin
-        public drawImage(image:BitmapData, offsetX:number, offsetY:number, width:number, height:number,
-                         surfaceOffsetX:number, surfaceOffsetY:number, surfaceImageWidth:number, surfaceImageHeight:number):void {
+        public drawImage(texture:BitmapData,
+                         sourceX:number, sourceY:number, sourceWidth:number, sourceHeight:number,
+                         destX:number, destY:number, destWidth:number, destHeight:number,
+                         textureSourceWidth:number, textureSourceHeight:number):void {
             if (this.contextLost) {
                 return;
             }
-            if (!image) {
+            if (!texture) {
                 return;
             }
             //if (this.filters) {
@@ -343,32 +435,47 @@ module egret.web {
             //        }
             //    }
             //}
-            this._drawImage(image,
-                offsetX, offsetY, width, height,
-                surfaceOffsetX, surfaceOffsetY, surfaceImageWidth, surfaceImageHeight);
+            this.createWebGLTexture(texture);
+            var webGLTexture = texture["webGLTexture"][this.glID];
+            if (!webGLTexture) {
+                return;
+            }
+            this.drawTexture(webGLTexture,
+                sourceX, sourceY, sourceWidth, sourceHeight,
+                destX, destY, destWidth, destHeight,
+                textureSourceWidth, textureSourceHeight);
         }
 
         private currentBaseTexture:Texture = null;
         private currentBatchSize:number = 0;
 
-        private _drawImage(texture:BitmapData,
-                           sourceX:number, sourceY:number, sourceWidth:number, sourceHeight:number,
-                           destX:number, destY:number, destWidth:number, destHeight:number):void {
-            var textureSourceWidth = texture.width;
-            var textureSourceHeight = texture.height;
-            this.createWebGLTexture(texture);
-            var webGLTexture = texture["webGLTexture"][this.glID];
-            if(!webGLTexture) {
+        /**
+         * @private
+         * 绘制webGL纹理
+         * */
+        private drawTexture(texture:WebGLTexture,
+                            sourceX:number, sourceY:number, sourceWidth:number, sourceHeight:number,
+                            destX:number, destY:number, destWidth:number, destHeight:number, textureWidth:number, textureHeight:number):void {
+            if (this.contextLost) {
                 return;
             }
-            if(this.currentBatchSize >= this.size - 1) {
+            if (!texture) {
+                return;
+            }
+            var textureSourceWidth = textureWidth;
+            var textureSourceHeight = textureHeight;
+            var webGLTexture = <Texture>texture;
+            if (!webGLTexture) {
+                return;
+            }
+            if (this.currentBatchSize >= this.size - 1) {
                 this.$drawWebGL();
                 this.currentBaseTexture = webGLTexture;
-                this.drawData.push({ texture: this.currentBaseTexture, count: 0 });
+                this.drawData.push({texture: this.currentBaseTexture, count: 0});
             }
             else if (webGLTexture !== this.currentBaseTexture) {
                 this.currentBaseTexture = webGLTexture;
-                this.drawData.push({ texture: this.currentBaseTexture, count: 0 });
+                this.drawData.push({texture: this.currentBaseTexture, count: 0});
             }
 
             //计算出绘制矩阵，之后把矩阵还原回之前的
@@ -459,7 +566,7 @@ module egret.web {
         public $computeDrawCall:boolean = false;
 
         public $drawWebGL():void {
-            if (this.currentBatchSize == 0 || this.contextLost) {
+            if ((this.currentBatchSize == 0 && this.drawData.length == 0) || this.contextLost) {
                 return;
             }
             this.start();
@@ -537,7 +644,7 @@ module egret.web {
                 var gl:any = this.context;
                 var glTexture = gl.createTexture();
                 bitmapData.webGLTexture[this.glID] = glTexture;
-                if(!glTexture) {
+                if (!glTexture) {
                     //先创建texture失败,然后lost事件才发出来..
                     this.contextLost = true;
                     return;
@@ -559,6 +666,18 @@ module egret.web {
 
         public onRenderFinish():void {
             this.$drawCalls = 0;
+            // 存储当前帧
+            var gl = this.context;
+            this.disableFrameBuffer();
+            gl.disable(gl.STENCIL_TEST);// 切换frameBuffer注意要禁用STENCIL_TEST
+            this.globalMatrix.setTo(1, 0, 0, -1, 0, this.surface.height);// 翻转,因为从frameBuffer中读出的图片是正的
+            this._globalAlpha = 1;
+            this.drawTexture(this.texture, 0, 0, this.surface.width, this.surface.height, 0, 0, this.surface.width, this.surface.height, this.surface.width, this.surface.height);
+            this.$drawWebGL();
+            this.enableFrameBuffer();
+            if (this.maskPushed) {
+                gl.enable(gl.STENCIL_TEST);
+            }
         }
 
         private globalMatrix:Matrix = new Matrix();
@@ -686,7 +805,7 @@ module egret.web {
             this.updateGraphics(graphics);
 
             this.shaderManager.activateShader(shader);
-            gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+            //gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
             gl.uniformMatrix3fv(shader.translationMatrix, false, this.matrixToArray(this.globalMatrix));
 
             gl.uniform2f(shader.projectionVector, this.projectionX, -this.projectionY);
@@ -707,7 +826,7 @@ module egret.web {
             this.shaderManager.activateShader(this.shaderManager.defaultShader);
 
             this.currentBlendMode = null;
-            this.setGlobalCompositeOperation("source-over");
+            //this.setGlobalCompositeOperation("source-over");
         }
 
         private matrixArray:Float32Array;
@@ -786,5 +905,6 @@ module egret.web {
     }
 
     WebGLRenderBuffer.initBlendMode();
-    var sharedBuffer:WebGLRenderBuffer = new WebGLRenderBuffer();
+
+    var sharedBuffer:WebGLRenderBuffer;
 }
