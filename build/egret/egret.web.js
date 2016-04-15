@@ -3015,6 +3015,8 @@ var egret;
                 oldSurface.height = 1;
                 oldSurface.width = 1;
             };
+            p.setDirtyRegionPolicy = function (state) {
+            };
             /**
              * 清空并设置裁切
              * @param regions 矩形列表
@@ -5398,6 +5400,8 @@ var egret;
                  * frameBuffer绑定标示
                  * */
                 this.frameBufferBinding = false;
+                this.dirtyRegionPolicy = true;
+                this._dirtyRegionPolicy = true; // 默认设置为true，保证第一帧绘制在frameBuffer上
                 this.glID = null;
                 this.size = 2000;
                 this.vertices = null;
@@ -5475,6 +5479,9 @@ var egret;
              * 启用frameBuffer
              * */
             p.enableFrameBuffer = function () {
+                if (this.frameBufferBinding) {
+                    return;
+                }
                 var gl = this.context;
                 gl.bindFramebuffer(gl.FRAMEBUFFER, this.frameBuffer);
                 this.frameBufferBinding = true;
@@ -5483,6 +5490,9 @@ var egret;
              * 禁用frameBuffer
              * */
             p.disableFrameBuffer = function () {
+                if (!this.frameBufferBinding) {
+                    return;
+                }
                 var gl = this.context;
                 gl.bindFramebuffer(gl.FRAMEBUFFER, null);
                 this.frameBufferBinding = false;
@@ -5541,24 +5551,33 @@ var egret;
              * @param offsetY 原始图像数据在改变后缓冲区的绘制起始位置y
              */
             p.resizeTo = function (width, height, offsetX, offsetY) {
-                if (!sharedBuffer) {
-                    sharedBuffer = new WebGLRenderBuffer();
-                }
-                var newBuffer = sharedBuffer;
                 var oldSurface = this.surface;
-                var oldContext = this.context;
-                this.context = newBuffer.context;
-                this.surface = newBuffer.surface;
-                this.resize(Math.max(width, 257), Math.max(height, 257));
-                this.setTransform(1, 0, 0, 1, 0, 0);
-                this.setGlobalCompositeOperation("source-over");
-                var oldSurfaceWidth = oldSurface.width;
-                var oldSurfaceHeight = oldSurface.height;
-                this.drawImage(oldSurface, 0, 0, oldSurfaceWidth, oldSurfaceHeight, offsetX, offsetY, oldSurfaceWidth, oldSurfaceHeight, oldSurfaceWidth, oldSurfaceHeight);
-                sharedBuffer.context = oldContext;
-                sharedBuffer.surface = oldSurface;
-                sharedBuffer.resize(1, 1);
-                this.initWebGL();
+                var oldWidth = oldSurface.width;
+                var oldHeight = oldSurface.height;
+                this.surface.width = width;
+                this.surface.height = height;
+                this.drawFrameBufferToSurface(0, 0, oldWidth, oldHeight, offsetX, offsetY, oldWidth, oldHeight, true);
+                // if (!sharedBuffer) {
+                //     sharedBuffer = new WebGLRenderBuffer()
+                // }
+                // var newBuffer = sharedBuffer;
+                // var oldSurface = this.surface;
+                // var oldContext = this.context;
+                // this.context = newBuffer.context;
+                // this.surface = newBuffer.surface;
+                // this.resize(Math.max(width, 257), Math.max(height, 257));
+                // this.setTransform(1, 0, 0, 1, 0, 0);
+                // this.setGlobalCompositeOperation("source-over");
+                // var oldSurfaceWidth = oldSurface.width;
+                // var oldSurfaceHeight = oldSurface.height;
+                // this.drawImage(<any>oldSurface, 0, 0, oldSurfaceWidth, oldSurfaceHeight, offsetX, offsetY, oldSurfaceWidth, oldSurfaceHeight, oldSurfaceWidth, oldSurfaceHeight);
+                // sharedBuffer.context = oldContext;
+                // sharedBuffer.surface = oldSurface;
+                // sharedBuffer.resize(1, 1);
+                // this.initWebGL();
+            };
+            p.setDirtyRegionPolicy = function (state) {
+                this.dirtyRegionPolicy = (state == "on");
             };
             /**
              * 清空并设置裁切
@@ -5567,20 +5586,27 @@ var egret;
              * @param offsetY 矩形要加上的偏移量y
              */
             p.beginClip = function (regions, offsetX, offsetY) {
+                if (this._dirtyRegionPolicy) {
+                    this.enableFrameBuffer();
+                }
+                else {
+                    this.disableFrameBuffer();
+                    this.clear();
+                }
                 offsetX = +offsetX || 0;
                 offsetY = +offsetY || 0;
                 this.setTransform(1, 0, 0, 1, offsetX, offsetY);
                 var length = regions.length;
-                // 擦除脏矩形区域
-                for (var i = 0; i < length; i++) {
-                    var region = regions[i];
-                    this.clearRect(region.minX, region.minY, region.width, region.height);
-                }
-                //只有一个区域且刚好为舞台大小时,不设置模板
+                //只有一个区域且刚好为舞台大小时,不设置模板,并且关闭frameBuffer，让元素直接绘制到舞台，提高性能
                 if (length == 1 && regions[0].minX == 0 && regions[0].minY == 0 &&
                     regions[0].width == this.surface.width && regions[0].height == this.surface.height) {
                     this.maskPushed = false;
                     return;
+                }
+                // 擦除脏矩形区域
+                for (var i = 0; i < length; i++) {
+                    var region = regions[i];
+                    this.clearRect(region.minX, region.minY, region.width, region.height);
                 }
                 // 设置模版
                 if (length > 0) {
@@ -5923,15 +5949,52 @@ var egret;
             };
             p.onRenderFinish = function () {
                 this.$drawCalls = 0;
-                // 存储当前帧
+                if (!this._dirtyRegionPolicy && this.dirtyRegionPolicy) {
+                    this.drawSurfaceToFrameBuffer(0, 0, this.surface.width, this.surface.height, 0, 0, this.surface.width, this.surface.height, true);
+                }
+                if (this._dirtyRegionPolicy) {
+                    this.drawFrameBufferToSurface(0, 0, this.surface.width, this.surface.height, 0, 0, this.surface.width, this.surface.height);
+                }
+                this._dirtyRegionPolicy = this.dirtyRegionPolicy;
+            };
+            /**
+             * 交换frameBuffer中的图像到surface中
+             * @param width 宽度
+             * @param height 高度
+             */
+            p.drawFrameBufferToSurface = function (sourceX, sourceY, sourceWidth, sourceHeight, destX, destY, destWidth, destHeight, clear) {
+                if (clear === void 0) { clear = false; }
                 var gl = this.context;
                 this.disableFrameBuffer();
                 gl.disable(gl.STENCIL_TEST); // 切换frameBuffer注意要禁用STENCIL_TEST
                 this.globalMatrix.setTo(1, 0, 0, -1, 0, this.surface.height); // 翻转,因为从frameBuffer中读出的图片是正的
                 this._globalAlpha = 1;
-                this.drawTexture(this.texture, 0, 0, this.surface.width, this.surface.height, 0, 0, this.surface.width, this.surface.height, this.surface.width, this.surface.height);
+                this.setGlobalCompositeOperation("source-over");
+                clear && this.clear();
+                this.drawTexture(this.texture, sourceX, sourceY, sourceWidth, sourceHeight, destX, destY, destWidth, destHeight, sourceWidth, sourceHeight);
                 this.$drawWebGL();
                 this.enableFrameBuffer();
+                if (this.maskPushed) {
+                    gl.enable(gl.STENCIL_TEST);
+                }
+            };
+            /**
+             * 交换surface的图像到frameBuffer中
+             * @param width 宽度
+             * @param height 高度
+             */
+            p.drawSurfaceToFrameBuffer = function (sourceX, sourceY, sourceWidth, sourceHeight, destX, destY, destWidth, destHeight, clear) {
+                if (clear === void 0) { clear = false; }
+                var gl = this.context;
+                this.enableFrameBuffer();
+                gl.disable(gl.STENCIL_TEST); // 切换frameBuffer注意要禁用STENCIL_TEST
+                // this.globalMatrix.setTo(1, 0, 0, -1, 0, this.surface.height);// 翻转,因为从frameBuffer中读出的图片是正的
+                this._globalAlpha = 1;
+                this.setGlobalCompositeOperation("source-over");
+                clear && this.clear();
+                this.drawImage(this.surface, sourceX, sourceY, sourceWidth, sourceHeight, destX, destY, destWidth, destHeight, sourceWidth, sourceHeight);
+                this.$drawWebGL();
+                this.disableFrameBuffer();
                 if (this.maskPushed) {
                     gl.enable(gl.STENCIL_TEST);
                 }
@@ -6598,11 +6661,12 @@ var egret;
                     }
                     buffer.transform(1, 0, 0, 1, node.x, node.y);
                 }
+                var surface = node.$canvasRenderBuffer.surface;
                 if (node.dirtyRender) {
-                    web.WebGLUtils.deleteWebGLTexture(node.$canvasRenderBuffer.surface);
+                    web.WebGLUtils.deleteWebGLTexture(surface);
                     node.$canvasRenderer["renderText"](node, node.$canvasRenderBuffer.context);
                 }
-                buffer.drawImage(node.$canvasRenderBuffer.surface, 0, 0, width, height, 0, 0, width, height, width, height);
+                buffer.drawImage(surface, 0, 0, width, height, 0, 0, width, height, surface.width, surface.height);
                 if (node.x || node.y) {
                     if (node.dirtyRender) {
                         node.$canvasRenderBuffer.context.translate(node.x, node.y);
@@ -6636,11 +6700,12 @@ var egret;
                     }
                     buffer.transform(1, 0, 0, 1, node.x, node.y);
                 }
+                var surface = node.$canvasRenderBuffer.surface;
                 if (node.dirtyRender) {
-                    web.WebGLUtils.deleteWebGLTexture(node.$canvasRenderBuffer.surface);
+                    web.WebGLUtils.deleteWebGLTexture(surface);
                     node.$canvasRenderer["renderGraphics"](node, node.$canvasRenderBuffer.context, forHitTest);
                 }
-                buffer.drawImage(node.$canvasRenderBuffer.surface, 0, 0, width, height, 0, 0, width, height, width, height);
+                buffer.drawImage(surface, 0, 0, width, height, 0, 0, width, height, surface.width, surface.height);
                 if (node.x || node.y) {
                     if (node.dirtyRender) {
                         node.$canvasRenderBuffer.context.translate(node.x, node.y);
