@@ -173,6 +173,13 @@ module egret.sys {
                 while (this.mergeDirtyList(dirtyList)) {
                 }
             }
+            var numDirty = this.dirtyList.length;
+            if(numDirty>0){
+                for (var i = 0; i < numDirty; i++) {
+                    this.dirtyList[i].intValues();
+                }
+            }
+
             return this.dirtyList;
         }
 

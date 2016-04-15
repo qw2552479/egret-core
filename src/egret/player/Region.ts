@@ -108,6 +108,17 @@ module egret.sys {
 
         /**
          * @private
+         * 把所有值都取整
+         */
+        public intValues(){
+            this.minX = Math.floor(this.minX);
+            this.minY = Math.floor(this.minY);
+            this.maxX = Math.ceil(this.maxX);
+            this.maxY = Math.ceil(this.maxY);
+            this.updateArea();
+        }
+        /**
+         * @private
          */
         public updateArea():void {
             this.width = this.maxX - this.minX;
