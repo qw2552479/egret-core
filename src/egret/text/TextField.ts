@@ -601,17 +601,17 @@ module egret {
 
         /**
          * @language en_US
-         * A Boolean value that indicates whether the text field has word wrap. If the value of wordWrap is true, the text
-         * field has word wrap; if the value is false, the text field does not have word wrap.
-         * @default true
+         * A Boolean value that indicates whether the text field word wrap. If the value is true, then the text field by word wrap; 
+         * if the value is false, the text field by newline characters.
+         * @default false
          * @version Egret 2.4
          * @platform Web,Native
          */
         /**
          * @language zh_CN
-         * 一个布尔值，表示文本字段是否自动换行。如果 wordWrap 的值为 true，则该文本字段自动换行；
-         * 如果值为 false，则该文本字段不自动换行,如果同时显式设置过宽度，超出宽度的部分将被截断。
-         * @default true
+         * 一个布尔值，表示文本字段是否按单词换行。如果值为 true，则该文本字段按单词换行；
+         * 如果值为 false，则该文本字段按字符换行。
+         * @default false
          * @version Egret 2.4
          * @platform Web,Native
          */
@@ -1069,7 +1069,7 @@ module egret {
         public set multiline(value:boolean) {
             this.$setMultiline(value);
         }
-
+           
         /**
          * @private
          *
@@ -1426,15 +1426,23 @@ module egret {
         }
 
         /**
-         * @private
-         * @version Egret 2.4
+         * @language en_US
+         * Enter the text automatically entered into the input state, the input type is text only and may only be invoked in the user interaction.
+         * @version Egret 3.0.8
          * @platform Web,Native
          */
-        public setFocus() {
-            //todo:
-            egret.$warn(1013);
-        }
-
+        /**
+         * @language zh_CN
+         * 输入文本自动进入到输入状态，仅在类型是输入文本并且是在用户交互下才可以调用。
+         * @version Egret 3.0.8
+         * @platform Web,Native
+         */
+        public setFocus():void {
+            if (this.type == egret.TextFieldType.INPUT && this.$stage) {
+                this.inputUtils.$onFocus();
+            }
+        }    
+            
         /**
          * @private
          *

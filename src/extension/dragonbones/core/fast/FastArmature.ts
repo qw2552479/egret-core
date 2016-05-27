@@ -98,7 +98,9 @@ module dragonBones {
 		/**
 		 * 保证CacheManager是独占的前提下可以开启，开启后有助于性能提高
 		 */
-		public isCacheManagerExclusive:boolean = false;
+        public isCacheManagerExclusive: boolean = false;
+        public _cacheFrameIndex: number = -1;
+
 		
 		/** @private */
 		public _animation:FastAnimation;
@@ -130,8 +132,12 @@ module dragonBones {
 		public _eventList:Array<any>;
 		
 		private _delayDispose:boolean;
-		private _lockDispose:boolean;
-		private useCache:boolean = true;
+        private _lockDispose: boolean;
+        /** @private*/
+        public _useCache: boolean = true;
+        /** @private*/
+        public _isFrameCached: boolean = false;
+
 		public constructor(display:any){
 			super();
 			this._display = display;
@@ -193,8 +199,9 @@ module dragonBones {
 		 * @param The amount of second to move the playhead ahead.
 		 */
 		
-		public advanceTime(passedTime:number):void{
-			this._lockDispose = true;
+        public advanceTime(passedTime: number): void{
+            this._lockDispose = true;
+            this._isFrameCached = false;
 			this._animation.advanceTime(passedTime);
 			
 			var bone:FastBone;
@@ -203,42 +210,64 @@ module dragonBones {
             var len:number = this._boneIKList.length;
             var j:number;
             var jLen:number;
-                
-			if(this._animation.animationState.isUseCache()){
-				if(!this.useCache){
-					this.useCache = true;
+            
+            if (this._isFrameCached) {
+				if(!this._useCache){
+					this._useCache = true;
 				}
 				i = this.slotList.length;
 				while(i --){
 					slot = this.slotList[i];
-					slot.updateByCache();
-				}
+					slot.updateByCache(this._cacheFrameIndex);
+                }
 			}
 			else{
-				if(this.useCache){
-					this.useCache = false;
-					i = this.slotList.length;
+				if(this._useCache){
+					this._useCache = false;
+					/*i = this.slotList.length;
 					while(i --){
 						slot = this.slotList[i];
 						slot.switchTransformToBackup();
-					}
+					}*/
 				}
 				
-				
-                
                 for (i = 0; i < len; i++) 
                 {
-                    for (j = 0, jLen = this._boneIKList[i].length; j < jLen; j++)
-                    {
-                        bone = this._boneIKList[i][j];
-                        bone.update();
-                        bone.rotationIK = bone.global.rotation;
-                        if(i != 0 && bone.isIKConstraint)
-                        {
-                            this._ikList[i-1].compute();
-                            bone.adjustGlobalTransformMatrixByIK();
-                        }
-                    }
+					for (j = 0, jLen = this._boneIKList[i].length; j < jLen; j++)
+					{
+						bone = this._boneIKList[i][j];
+						if(bone.isIKConstraint){
+							var ikCon:FastIKConstraint = this._ikList[i-1];
+							if(ikCon.bones[0].name == bone.name){
+								bone.update();
+								bone.rotationIK = bone.global.rotation;
+								if(ikCon.bones.length>1){
+									ikCon.bones[1].update();
+									ikCon.bones[1].rotationIK = ikCon.bones[1].global.rotation;
+								}
+								ikCon.compute();
+							}
+							bone.adjustGlobalTransformMatrixByIK();
+						}else{
+							bone.update();
+							bone.rotationIK = bone.global.rotation;
+						}
+					}
+					/*if(i != 0)
+					{
+						this._ikList[i-1].compute();
+						for (j = 0, jLen = this._boneIKList[i].length; j < jLen; j++) {
+							bone = this._boneIKList[i][j];
+							bone.adjustGlobalTransformMatrixByIK();
+						}
+					}else{
+						for (j = 0, jLen = this._boneIKList[i].length; j < jLen; j++)
+						{
+							bone = this._boneIKList[i][j];
+							bone.update();
+							bone.rotationIK = bone.global.rotation;
+						}
+					}*/
                 }
 				
 				i = this.slotList.length;
@@ -259,17 +288,25 @@ module dragonBones {
 			
 			if(this._slotsZOrderChanged){
 				this.updateSlotsZOrder();
-			}
+            }
+
+            // Modify Fast mode by duanchunlei
+            if (!this._isFrameCached) {
+                var animationCache = this._animation.animationState.animationCache;
+                if (animationCache) {
+                    animationCache.addFrame(this._cacheFrameIndex, this);
+                }
+            }
 			
 			while(this._eventList.length > 0){
 				this.dispatchEvent(this._eventList.shift());
-			}
-			
-			this._lockDispose = false;
-			if(this._delayDispose){
-				this.dispose();
-			}
-		}
+            }
+
+            this._lockDispose = false;
+            if (this._delayDispose) {
+                this.dispose();
+            }
+        }
 
 		/**
 		 * 开启动画缓存
@@ -278,22 +315,32 @@ module dragonBones {
 		 * @param  {boolean} 动画是否是循环动画，仅在3.0以下的数据格式使用，如果动画不是循环动画请设置为false，默认为true。
 		 * @return {AnimationCacheManager}  返回缓存管理器，可以绑定到其他armature以减少内存
 		 */
-		public enableAnimationCache(frameRate:number, animationList:Array<any> = null, loop:boolean = true):AnimationCacheManager{
-			var animationCacheManager:AnimationCacheManager = AnimationCacheManager.initWithArmatureData(this.armatureData,frameRate);
-			if(animationList){
+        public enableAnimationCache(frameRate: number, animationList: Array<any> = null, loop: boolean = true): AnimationCacheManager{
+        
+            // Modify Fast mode by duanchunlei
+            var animationCacheManager: AnimationCacheManager = this._armatureData._cacheManager;
+            if (animationCacheManager) {
+                //animationCacheManager.bindCacheUserArmature(this);
+                this.enableCache = true;
+                return animationCacheManager;
+            }
+
+            this._armatureData._cacheManager = animationCacheManager = AnimationCacheManager.initWithArmatureData(this.armatureData, frameRate);
+			/*if(animationList){
 				var length:number = animationList.length;
 				for(var i:number = 0;i < length;i++){
 					var animationName:string = animationList[i];
 					animationCacheManager.initAnimationCache(animationName);
 				}
-			}
-			else{
+			}*/
+			//else{
 				animationCacheManager.initAllAnimationCache();
-			}
-			animationCacheManager.setCacheGeneratorArmature(this);
-			animationCacheManager.generateAllAnimationCache(loop);
+            //}
+
+			//animationCacheManager.setCacheGeneratorArmature(this);
+			//animationCacheManager.generateAllAnimationCache(loop);
 			
-			animationCacheManager.bindCacheUserArmature(this);
+			//animationCacheManager.bindCacheUserArmature(this);
 			this.enableCache = true;
 			return animationCacheManager;
 		}
@@ -383,7 +430,7 @@ module dragonBones {
 			bone.armature = this;
 			bone.parentBoneData = parentBone;
 			this.boneList.unshift(bone);
-			this._boneDic[bone.name] = bone;
+            this._boneDic[bone.name] = bone;
 		}
 
 		/**
@@ -405,7 +452,6 @@ module dragonBones {
 				if(slot.hasChildArmature){
 					this.slotHasChildArmatureList.push(slot);
 				}
-				
 			}
 			else{
 				throw new Error();
@@ -459,11 +505,12 @@ module dragonBones {
 		}
 		
 		/** @private When AnimationState enter a key frame, call this func*/
-		public arriveAtFrame(frame:Frame, animationState:FastAnimationState):void{
+        public arriveAtFrame(frame: Frame, animationState: FastAnimationState): void{
 			if(frame.event && this.hasEventListener(FrameEvent.ANIMATION_FRAME_EVENT)){
 				var frameEvent:FrameEvent = new FrameEvent(FrameEvent.ANIMATION_FRAME_EVENT);
 				frameEvent.animationState = animationState;
-				frameEvent.frameLabel = frame.event;
+                frameEvent.frameLabel = frame.event;
+                frameEvent.bone = frame.bone? this.getBone(frame.bone): null;
 				this._addEvent(frameEvent);
 			}
 

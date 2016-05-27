@@ -43,6 +43,8 @@ module egret {
     locale_strings[1040] = "hitTestPoint can not detect crossOrigin images! Please check if the display object has crossOrigin elements.";
     locale_strings[1041] = "egret.MainContext.runtimeType is deprecated, please use egret.Capabilities.runtimeType replace";
     locale_strings[1042] = "The parameters passed in the region needs is an integer in drawToTexture method. Otherwise, some browsers will draw abnormal.";
+    locale_strings[1046] = "BitmapText no corresponding characters: {0}, please check the configuration file";
+    locale_strings[1047] = "egret.localStorage.setItem save failed,key={0}&value={1}";
 
     //gui  3000-3099
     locale_strings[3000] = "Theme configuration file failed to load: {0}";
@@ -59,7 +61,7 @@ module egret {
     locale_strings[3011] = "Index:\"{0}\" is out of the visual element index range";
     locale_strings[3012] = "This method is not available in Scroller component!";
     locale_strings[3013] = "UIStage is GUI root container, and only one such instant is in the display list！";
-
+    locale_strings[3014] = "Webkit fullscreen error";
     //socket 3100-3199
     locale_strings[3100] = "Current browser does not support WebSocket";
     locale_strings[3101] = "Please connect Socket firstly";

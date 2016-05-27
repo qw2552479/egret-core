@@ -267,7 +267,11 @@ module egret.sys {
                 var renderNode = <BitmapNode>this.$renderNode;
                 renderNode.drawData.length = 0;
                 renderNode.image = <any>surface;
-                renderNode.drawImage(0, 0, surface.width, surface.height, -this.offsetX, -this.offsetY, surface.width, surface.height);
+                var width = surface.width;
+                var height = surface.height;
+                renderNode.imageWidth = width;
+                renderNode.imageHeight = height;
+                renderNode.drawImage(0, 0, width, height, -this.offsetX, -this.offsetY, width, height);
             }
 
             this.dirtyList = null;
@@ -298,6 +302,12 @@ module egret.sys {
             //在chrome里，小等于256*256的canvas会不启用GPU加速。
             var width = Math.max(257, bounds.width);
             var height = Math.max(257, bounds.height);
+            if(this.offsetX == oldOffsetX &&
+                this.offsetY == oldOffsetY &&
+                buffer.surface.width == width &&
+                buffer.surface.height == height) {
+                return;
+            }
             if (!this.sizeChanged) {
                 this.sizeChanged = true;
                 buffer.resize(width, height);

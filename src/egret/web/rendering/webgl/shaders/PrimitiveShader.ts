@@ -28,72 +28,20 @@
 //////////////////////////////////////////////////////////////////////////////////////
 
 module egret.web {
+
     /**
      * @private
      */
-    export class PrimitiveShader {
-
-        private gl:WebGLRenderingContext = null;
-        public program:WebGLProgram = null;
-        public projectionVector:WebGLUniformLocation = null;
-        public offsetVector:WebGLUniformLocation = null;
-        public tintColor:WebGLUniformLocation = null;
-        public aVertexPosition:number = null;
-        public colorAttribute:number = null;
-        public attributes:Array<number> = null;
-        public translationMatrix:WebGLUniformLocation = null;
-        public alpha:WebGLUniformLocation = null;
-
+    export class PrimitiveShader extends EgretShader {
         public fragmentSrc:string =
-            "precision mediump float;\n" +
+            "precision lowp float;\n" +
+            "varying vec2 vTextureCoord;\n" +
             "varying vec4 vColor;\n" +
 
             "void main(void) {\n" +
-            "   gl_FragColor = vColor;\n" +
+                "gl_FragColor = vColor;\n" +
             "}";
 
-        public vertexSrc =
-            "attribute vec2 aVertexPosition;\n" +
-            "attribute vec4 aColor;\n" +
-            "uniform mat3 translationMatrix;\n" +
-            "uniform vec2 projectionVector;\n" +
-            "uniform vec2 offsetVector;\n" +
-            "uniform float alpha;\n" +
-            "uniform vec3 tint;\n" +
-            "varying vec4 vColor;\n" +
-
-            "void main(void) {\n" +
-            "   vec3 v = translationMatrix * vec3(aVertexPosition , 1.0);\n" +
-            "   v -= offsetVector.xyx;\n" +
-            "   gl_Position = vec4( v.x / projectionVector.x -1.0, v.y / -projectionVector.y + 1.0 , 0.0, 1.0);\n" +
-            "   vColor = aColor * vec4(tint * alpha, alpha);\n" +
-            "}";
-
-        constructor(gl:WebGLRenderingContext) {
-            this.gl = gl;
-            this.init();
-        }
-
-        private init() {
-            var gl:WebGLRenderingContext = this.gl;
-
-            var program:WebGLProgram = WebGLUtils.compileProgram(gl, this.vertexSrc, this.fragmentSrc);
-            gl.useProgram(program);
-
-            this.projectionVector = gl.getUniformLocation(program, "projectionVector");
-            this.offsetVector = gl.getUniformLocation(program, "offsetVector");
-            this.tintColor = gl.getUniformLocation(program, "tint");
-
-
-            this.aVertexPosition = gl.getAttribLocation(program, "aVertexPosition");
-            this.colorAttribute = gl.getAttribLocation(program, "aColor");
-
-            this.attributes = [this.aVertexPosition, this.colorAttribute];
-
-            this.translationMatrix = gl.getUniformLocation(program, "translationMatrix");
-            this.alpha = gl.getUniformLocation(program, "alpha");
-
-            this.program = program;
-        }
     }
+
 }

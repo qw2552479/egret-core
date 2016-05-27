@@ -144,7 +144,7 @@ module egret.web {
             video.height = video.videoHeight;
             video.width = video.videoWidth;
             if (egret.Capabilities.os != "Windows PC" && egret.Capabilities.os != "Mac OS") {
-                setTimeout(function () {//为了解决视频返回挤压页面内容
+                window.setTimeout(function () {//为了解决视频返回挤压页面内容
                     video.width = 0;
                 }, 1000);
             }
@@ -172,6 +172,12 @@ module egret.web {
                 this.setFullScreenMonitor(false);
 
                 egret.startTick(this.markDirty, this);
+                
+                if (egret.Capabilities.isMobile) {
+                    this.video.currentTime = 0;
+                    this.onVideoEnded();
+                    return;
+                }
             }
 
             video.play();
@@ -225,6 +231,10 @@ module egret.web {
             var isfullscreen = !!this.video['webkitDisplayingFullscreen'];
             if (!isfullscreen) {
                 this.checkFullScreen(false);
+                
+                if (!egret.Capabilities.isMobile) {
+                    this._fullscreen = isfullscreen;
+                }
             }
         };
 
@@ -505,8 +515,16 @@ module egret.web {
             if (this.video) {
                 return this.video.paused;
             }
-
             return true;
+        }
+        /**
+         * @inheritDoc
+         */
+        public get length():number{
+            if(this.video){
+                return this.video.duration;
+            }
+            throw new Error("Video not loaded!");
         }
     }
 

@@ -485,13 +485,14 @@ module egret {
                             xPos += emptyWidth;
                         }
                         else {
-                            egret.$warn(1011, character);
+                            egret.$warn(1046, character);
                         }
                         continue;
                     }
                     var bitmapWidth:number = texture._bitmapWidth;
                     var bitmapHeight:number = texture._bitmapHeight;
-
+                    node.imageWidth = texture._sourceWidth;
+                    node.imageHeight = texture._sourceHeight;
                     node.drawImage(texture._bitmapX, texture._bitmapY,
                         bitmapWidth, bitmapHeight, xPos + texture._offsetX, yPos + texture._offsetY,
                         texture.$getScaleBitmapWidth(), texture.$getScaleBitmapHeight());
@@ -639,7 +640,7 @@ module egret {
                             textureHeight = emptyHeight;
                         }
                         else {
-                            egret.$warn(1011, character);
+                            egret.$warn(1046, character);
                             if (isFirstChar) {
                                 isFirstChar = false;
                             }

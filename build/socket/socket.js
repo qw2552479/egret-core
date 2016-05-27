@@ -320,6 +320,7 @@ var egret;
              * @private
              */
             this._connected = false;
+            this.connectCount = 0;
             /**
              * @private
              */
@@ -356,6 +357,7 @@ var egret;
          * @platform Web,Native
          */
         p.connect = function (host, port) {
+            this.connectCount++;
             this.socket.connect(host, port);
         };
         /**
@@ -363,6 +365,7 @@ var egret;
          * @param url 全地址。如ws://echo.websocket.org:80
          */
         p.connectByUrl = function (url) {
+            this.connectCount++;
             this.socket.connectByUrl(url);
         };
         /**
@@ -385,8 +388,11 @@ var egret;
          *
          */
         p.onConnect = function () {
-            this._connected = true;
-            this.dispatchEventWith(egret.Event.CONNECT);
+            this.connectCount--;
+            if (this.connectCount == 0) {
+                this._connected = true;
+                this.dispatchEventWith(egret.Event.CONNECT);
+            }
         };
         /**
          * @private
